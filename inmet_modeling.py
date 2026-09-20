@@ -5,64 +5,311 @@
 
 # ## 1. Preparação da série
 
-# In[1]:
+# In[164]:
 
 
-import numpy as np
-import pandas as pd
-import torch
-from torch import nn
-from torch.utils.data import TensorDataset, DataLoader
-import matplotlib.pyplot as plt
+import importlib
+import validacao_carga_inmet
 
-arquivo = (
-    "INMET_SE_SP_A707_PRESIDENTE PRUDENTE_"
-    "01-01-2025_A_31-12-2025.CSV"
+importlib.reload(validacao_carga_inmet)
+
+from validacao_carga_inmet import carregar_e_validar_diretorio
+
+
+# In[165]:
+
+
+resultado_carga = carregar_e_validar_diretorio(
+    pasta="./estacao_A707",
+    padrao="INMET*.CSV",
+    wmo_esperado="A707",
+
+    # A validação inicial não depende de um alvo.
+    coluna_alvo_criterio=None,
+
+    # Exclui somente erros estruturais.
+    excluir_arquivos_com_erro_estrutural=True,
+
+    # Salva cópias com ",numero" corrigido.
+    salvar_copias_preprocessadas=True
 )
 
-COLUNA_ALVO = "UMIDADE REL. MAX. NA HORA ANT. (AUT) (%)"
+df = resultado_carga["dados"]
 
-df = pd.read_csv(
-    arquivo,
-    encoding="latin-1",
-    skiprows=8,
-    sep=";",
-    decimal=","
+relatorio_arquivos = resultado_carga[
+    "relatorio_arquivos"
+]
+
+relatorio_colunas = resultado_carga[
+    "relatorio_colunas"
+]
+
+relatorio_global = resultado_carga[
+    "relatorio_global_colunas"
+]
+
+registro_preprocessamento = resultado_carga[
+    "relatorio_preprocessamento"
+]
+
+
+# In[166]:
+
+
+print(
+    relatorio_arquivos.to_string(index=False)
 )
 
-df = df.drop(columns=["Unnamed: 19"], errors="ignore")
-
-df["datetime"] = pd.to_datetime(
-    df["Data"].astype(str)
-    + " "
-    + df["Hora UTC"].astype(str).str.replace(
-        " UTC", "", regex=False
-    ),
-    format="%Y/%m/%d %H%M",
-    errors="coerce",
-    utc=True
+print(
+    relatorio_global.to_string(index=False)
 )
 
-df[COLUNA_ALVO] = pd.to_numeric(
-    df[COLUNA_ALVO],
-    errors="coerce"
+
+# In[168]:
+
+
+colunas_vazias_globais = resultado_carga[
+    "colunas_vazias_globais"
+]
+
+print(
+    "Colunas globalmente vazias:",
+    colunas_vazias_globais
 )
 
-df = (
-    df.sort_values("datetime")
-      .drop_duplicates(subset="datetime")
-      .reset_index(drop=True)
+df = df.drop(
+    columns=colunas_vazias_globais,
+    errors="ignore"
 )
 
-# Mantém a frequência horária
-serie_bruta = df[COLUNA_ALVO].copy()
 
-# Para o relatório, informe que os valores ausentes foram preenchidos pelo último valor observado, preservando a causalidade temporal.
-serie_bruta = serie_bruta.ffill()
+# In[172]:
 
-if serie_bruta.isna().any():
-    mediana_inicial = serie_bruta.dropna().iloc[:24].median()
-    serie_bruta = serie_bruta.fillna(mediana_inicial)
+
+def resumir_alvo_por_ano(
+    df,
+    coluna_alvo,
+    limite_ausencia=20.0
+):
+    tabela = (
+        df.assign(
+            ano=df["datetime"].dt.year
+        )
+        .groupby("ano")[coluna_alvo]
+        .agg(
+            registros="size",
+            validos="count",
+            media="mean",
+            minimo="min",
+            maximo="max"
+        )
+    )
+
+    tabela["ausentes"] = (
+        tabela["registros"]
+        - tabela["validos"]
+    )
+
+    tabela["ausencia_pct"] = (
+        tabela["ausentes"]
+        / tabela["registros"]
+        * 100
+    )
+
+    tabela["aprovado_percentual"] = (
+        tabela["ausencia_pct"]
+        <= limite_ausencia
+    )
+
+    tabela["classificacao"] = np.select(
+        [
+            tabela["ausencia_pct"] <= 10,
+            tabela["ausencia_pct"] <= 20
+        ],
+        [
+            "Aceitável",
+            "Revisar"
+        ],
+        default="Excluir"
+    )
+
+    return tabela.reset_index()
+
+
+# In[173]:
+
+
+COLUNA_ALVO = "umidade_horaria_pct"
+
+resumo_alvo = resumir_alvo_por_ano(
+    df=df,
+    coluna_alvo=COLUNA_ALVO,
+    limite_ausencia=20.0
+)
+
+print(
+    resumo_alvo.to_string(index=False)
+)
+
+
+# In[175]:
+
+
+anos_aprovados = (
+    resumo_alvo
+    .loc[
+        resumo_alvo["aprovado_percentual"],
+        "ano"
+    ]
+    .astype(int)
+    .tolist()
+)
+
+anos_excluidos = (
+    resumo_alvo
+    .loc[
+        ~resumo_alvo["aprovado_percentual"],
+        "ano"
+    ]
+    .astype(int)
+    .tolist()
+)
+
+print(
+    "Anos aprovados:",
+    anos_aprovados
+)
+
+print(
+    "Anos excluídos:",
+    anos_excluidos
+)
+
+
+# In[176]:
+
+
+df["ano"] = df["datetime"].dt.year
+
+df["ano_aprovado_alvo"] = (
+    df["ano"].isin(anos_aprovados)
+)
+
+
+# In[177]:
+
+
+df["alvo_modelagem"] = (
+    df[COLUNA_ALVO]
+    .where(df["ano_aprovado_alvo"])
+)
+
+
+# In[179]:
+
+
+df["alvo_modelagem"] = (
+    df.groupby("ano")["alvo_modelagem"]
+    .transform(
+        lambda serie: serie.ffill(limit=3)
+    )
+)
+
+
+# Para o primeiro experimento multiano, você pode evitar qualquer imputação:
+
+# In[180]:
+
+
+df["alvo_modelagem"] = df[
+    COLUNA_ALVO
+].where(
+    df["ano_aprovado_alvo"]
+)
+
+
+# E descartar apenas as janelas incompletas. Essa alternativa facilita a interpretação metodológica:
+# 
+# - Nenhum valor do alvo foi imputado. Foram utilizadas somente janelas integralmente observadas.
+# 
+# Eu começaria com essa abordagem. Depois, você poderá comparar com ffill(limit=3).
+
+# ## 1.1. Normalização apenas com os anos de treinamento
+# Considerando 
+# ```python
+# Treino: dados aprovados anteriores a 2023
+# Validação: 2023 e 2024
+# Teste: 2025
+# Avaliação adicional: 2026 parcial
+# ```
+
+# In[181]:
+
+
+data_inicio_validacao = pd.Timestamp(
+    "2023-01-01",
+    tz="UTC"
+)
+
+data_inicio_teste = pd.Timestamp(
+    "2025-01-01",
+    tz="UTC"
+)
+
+data_fim_teste = pd.Timestamp(
+    "2026-01-01",
+    tz="UTC"
+)
+
+
+# In[182]:
+
+
+mascara_treino = (
+    (df["datetime"] < data_inicio_validacao)
+    & df["ano_aprovado_alvo"]
+    & df["alvo_modelagem"].notna()
+)
+
+
+# In[183]:
+
+
+media_treino = df.loc[
+    mascara_treino,
+    "alvo_modelagem"
+].mean()
+
+desvio_treino = df.loc[
+    mascara_treino,
+    "alvo_modelagem"
+].std()
+
+print(
+    f"Média do treino: {media_treino:.3f}"
+)
+
+print(
+    f"Desvio do treino: {desvio_treino:.3f}"
+)
+
+
+# In[184]:
+
+
+# normalização z-score
+
+df["alvo_normalizado"] = (
+    (
+        df["alvo_modelagem"]
+        - media_treino
+    )
+    / desvio_treino
+).astype(np.float32)
+
+
+# In[ ]:
+
 
 df[COLUNA_ALVO] = serie_bruta
 
@@ -99,6 +346,17 @@ desvio_treino = serie_treino.std()
 serie_normalizada = (
     (serie - media_treino) / desvio_treino
 ).astype(np.float32)
+
+
+# In[92]:
+
+
+print(relatorio_arquivos.to_string(index=False))
+
+assert not df.empty
+assert df["datetime"].is_monotonic_increasing
+assert not df["datetime"].duplicated().any()
+assert COLUNA_ALVO in df.columns
 
 
 # In[2]:
@@ -208,7 +466,7 @@ class GRURegressor(nn.Module):
         return self.output(output[:, -1, :])
 
 
-# In[12]:
+# In[ ]:
 
 
 def criar_modelo_linear(tau):
@@ -216,7 +474,7 @@ def criar_modelo_linear(tau):
 
 
 def criar_modelo_gru(
-    hidden_size=128,
+    hidden_size=64,
     num_layers=2,
     dropout=0.2
 ):
