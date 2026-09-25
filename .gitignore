@@ -238,3 +238,5 @@ __marimo__/
 
 # data files
 *.csv
+.vscode/settings.json
+resultados_relatorio_parcial/
