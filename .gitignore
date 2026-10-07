@@ -240,3 +240,9 @@ __marimo__/
 *.csv
 .vscode/settings.json
 resultados_relatorio_parcial/
+
+# Dados processados gerados pelo notebook
+dados_processados_multivariados/
+
+# Relatórios em PDF gerados pelo notebook
+*.pdf
