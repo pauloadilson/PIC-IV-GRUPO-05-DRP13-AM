@@ -243,6 +243,7 @@ resultados_relatorio_parcial/
 
 # Dados processados gerados pelo notebook
 dados_processados_multivariados/
+resultados_modelagem/
 
 # Relatórios em PDF gerados pelo notebook
 *.pdf
