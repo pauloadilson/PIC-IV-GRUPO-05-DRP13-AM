@@ -247,3 +247,4 @@ resultados_modelagem/
 
 # Relatórios em PDF gerados pelo notebook
 *.pdf
+.cache.sqlite
