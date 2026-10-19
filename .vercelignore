@@ -1,0 +1,21 @@
+# Arquivos e diretórios pesados de pesquisa e exploração a ignorar no deploy do Vercel
+*.csv
+*.ipynb
+*.pdf
+*.md
+estacao_A707/
+estacao_A707_originais/
+dados_processados_multivariados/
+modelos_salvos/
+resultados_relatorio_parcial/
+resultados_modelagem/comparacao_final_TU/*.csv
+resultados_modelagem/comparacao_final_TU/*.json
+.pytest_cache/
+tests/
+.cache.sqlite
+.git
+.env
+.vscode
+__pycache__/
+*.pyc
+
