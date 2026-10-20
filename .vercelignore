@@ -8,8 +8,7 @@ estacao_A707_originais/
 dados_processados_multivariados/
 modelos_salvos/
 resultados_relatorio_parcial/
-resultados_modelagem/comparacao_final_TU/*.csv
-resultados_modelagem/comparacao_final_TU/*.json
+resultados_modelagem/
 .pytest_cache/
 tests/
 .cache.sqlite

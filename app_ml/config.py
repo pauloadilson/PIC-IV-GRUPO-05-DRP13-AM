@@ -11,19 +11,66 @@ except ImportError:  # pragma: no cover - fallback caso pydantic-settings não e
     SettingsConfigDict = dict  # type: ignore
 
 
-RAIZ_PROJETO = Path(__file__).resolve().parent.parent
-CAMINHO_PACOTE_PADRAO = (
-    RAIZ_PROJETO
-    / "resultados_modelagem"
-    / "comparacao_final_TU"
-    / "pacote_hgb_TU_48_api.joblib"
-)
+DIRETORIO_APP_ML = Path(__file__).resolve().parent
+RAIZ_PROJETO = DIRETORIO_APP_ML.parent
+DIRETORIO_ARTEFATOS = DIRETORIO_APP_ML / "artefatos"
 
 
 class MLSettings(BaseSettings):
     """Configurações da API de Aprendizagem de Máquina obtidas via variáveis de ambiente."""
 
-    ml_model_package_path: str = str(CAMINHO_PACOTE_PADRAO)
+    ml_model_package: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "ML_MODEL_PACKAGE",
+            "ml_model_package",
+            "NOME_MODELO",
+            "nome_modelo",
+            "ML_MODEL_PACKAGE_PATH",
+            "ml_model_package_path",
+        ),
+        description="Nome ou caminho do arquivo do modelo configurado via .env (ex: ML_MODEL_PACKAGE=nome_do_modelo.joblib).",
+    )
+
+    def obter_caminho_modelo(self) -> Path:
+        """
+        Resolve dinamicamente o arquivo do modelo com base na variável ML_MODEL_PACKAGE:
+        1. Se ML_MODEL_PACKAGE for informado:
+           - Procura dentro de app_ml/artefatos/<ML_MODEL_PACKAGE>;
+           - Procura em relação à raiz do projeto ou caminho absoluto.
+        2. Fallback caso a variável não esteja no .env:
+           - Localiza automaticamente o primeiro arquivo .joblib em app_ml/artefatos/.
+        """
+        if self.ml_model_package:
+            p = Path(self.ml_model_package.strip())
+            if p.is_absolute() and p.exists():
+                return p
+            cand_artefatos = DIRETORIO_ARTEFATOS / p
+            if cand_artefatos.exists():
+                return cand_artefatos
+            cand_raiz = RAIZ_PROJETO / p
+            if cand_raiz.exists():
+                return cand_raiz
+            if p.exists():
+                return p
+            return cand_artefatos
+
+        # Fallback de autodescoberta: procura qualquer .joblib em app_ml/artefatos/
+        if DIRETORIO_ARTEFATOS.exists():
+            joblibs = sorted(DIRETORIO_ARTEFATOS.glob("*.joblib"))
+            if joblibs:
+                return joblibs[0]
+
+        raise FileNotFoundError(
+            "Nenhum pacote de modelo foi configurado ou encontrado. "
+            "Por favor, defina a variável ML_MODEL_PACKAGE no arquivo .env."
+        )
+
+    @property
+    def ml_model_package_path(self) -> str:
+        """Propriedade de compatibilidade que retorna o caminho resolvido do modelo."""
+        return str(self.obter_caminho_modelo())
+    
     ml_api_key: str | None = Field(
         default=None,
         validation_alias=AliasChoices("ML_API_KEY", "API_KEY", "ml_api_key"),
