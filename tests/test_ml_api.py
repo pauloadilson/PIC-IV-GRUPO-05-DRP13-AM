@@ -106,7 +106,7 @@ def test_forecast_24h_sucesso_completo():
 
     ctx = summary["thresholds_by_context"]
     assert "geral_viveiro" in ctx
-    assert "alface_solaris" in ctx
+    assert "alface_crespa" in ctx
     assert "rosa_do_deserto" in ctx
     assert "salsinha" in ctx
 

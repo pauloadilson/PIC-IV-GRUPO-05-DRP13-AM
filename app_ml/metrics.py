@@ -180,9 +180,9 @@ def calcular_resumo_e_indicadores(
             "heat_attention_ge_28c": geral_calor_28,
             "heat_critical_ge_32c": geral_calor_32,
         },
-        "alface_solaris": {
-            "crop_id": "alface-solaris",
-            "crop_name": "Alface Solaris",
+        "alface_crespa": {
+            "crop_id": "alface-crespa",
+            "crop_name": "Alface Crespa",
             "optimal_temperature_range": "15°C - 25°C",
             "optimal_humidity_range": "60% - 80%",
             "heat_stress_gt_26c": alface_calor_26,
@@ -314,10 +314,10 @@ def calcular_resumo_e_indicadores(
         alerts.append(
             AlertItem(
                 code="ALFACE_HEAT_STRESS_FORECAST",
-                crop_id="alface-solaris",
-                crop_name="Alface Solaris",
+                crop_id="alface-crespa",
+                crop_name="Alface Crespa",
                 severity="danger" if alface_calor_26["longest_sequence_hours"] >= 4 or t_max >= 30.0 else "warning",
-                title="Risco Preditivo de Tipburn / Estresse Térmico (Alface Solaris)",
+                title="Risco Preditivo de Tipburn / Estresse Térmico (Alface Crespa)",
                 message=(
                     f"Previstas {alface_calor_26['hours_count']}h acima de 26°C nas próximas 24h "
                     f"(maior sequência: {alface_calor_26['longest_sequence_hours']}h, "
